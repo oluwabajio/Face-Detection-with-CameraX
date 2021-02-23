@@ -1,6 +1,7 @@
 package face.detection.ml.kit
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -15,6 +16,10 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.navigation.fragment.findNavController
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceContour
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import face.detection.ml.kit.databinding.FragmentHomeBinding
 import kotlinx.android.synthetic.main.fragment_home.*
 import java.io.File
@@ -42,6 +47,8 @@ lateinit var binding: FragmentHomeBinding
         // Inflate the layout for this fragment
         binding = FragmentHomeBinding.inflate(inflater,container, false)
         val view: View = binding.root
+
+
 
 
         initCamera()
@@ -108,10 +115,12 @@ lateinit var binding: FragmentHomeBinding
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                        Log.d(TAG, "Average luminosity: $luma")
+                  //      Log.d(TAG, "Average luminosity: $luma")
                       activity?.runOnUiThread {
                           val bitmap = viewFinder.bitmap
                           binding.imgView.setImageBitmap(bitmap)
+
+
                       }
                     })
                 }
@@ -195,16 +204,63 @@ lateinit var binding: FragmentHomeBinding
             return data // Return the byte array
         }
 
-        override fun analyze(image: ImageProxy) {
+        @SuppressLint("UnsafeExperimentalUsageError")
+        override fun analyze(imageProxy: ImageProxy) {
 
-            val buffer = image.planes[0].buffer
+            val buffer = imageProxy.planes[0].buffer
             val data = buffer.toByteArray()
             val pixels = data.map { it.toInt() and 0xFF }
             val luma = pixels.average()
 
             listener(luma)
+         ///   Log.e(TAG, "analyze: aaa = "+ luma )
 
-            image.close()
+          //  val image = InputImage.fromBitmap(bitmap, 0)
+
+
+
+
+
+            val mediaImage = imageProxy.image
+            val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+
+
+            val realTimeOpts = FaceDetectorOptions.Builder()
+                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+                .build()
+            val detector = FaceDetection.getClient()
+            val result = detector.process(image)
+                .addOnSuccessListener { faces ->
+                    // Task completed successfully
+                    // ...
+                    Log.e(TAG, "startCamera: Success - Size is "+ faces.size )
+
+                    for (face in faces) {
+                        val bounds = face.boundingBox
+                        val rotY = face.headEulerAngleY // Head is rotated to the right rotY degrees
+                        val rotZ = face.headEulerAngleZ // Head is tilted sideways rotZ degrees
+
+
+                        // If contour detection was enabled:
+//                                      val leftEyeContour = face.getContour(FaceContour.LEFT_EYE)?.points
+//                                      val upperLipBottomContour = face.getContour(FaceContour.UPPER_LIP_BOTTOM)?.points
+
+
+                    }
+
+                }
+                .addOnFailureListener { e ->
+                    // Task failed with an exception
+                    // ...
+                    Log.e(TAG, "startCamera: Failed"+e.message )
+                }
+                .addOnCompleteListener {
+                    mediaImage?.close()
+                    imageProxy.close()
+                }
+
+
+
         }
     }
 }
